@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{% if invalid %}Location not found{% else %}{{ label }} weather{% endif %} · Open Weather{% endblock %}
+
+{% block content %}
+<p><a href="{% url 'weather:search' %}">← Back to search</a></p>
+
+{% if invalid %}
+<div class="alert alert-error" role="alert">
+  <p>We couldn't tell which location you meant. Choose a location from the search results.</p>
+  <p><a class="button button-secondary" href="{% url 'weather:search' %}">Search for a location</a></p>
+</div>
+{% else %}
+
+{% if error %}
+<div class="alert alert-error" role="alert">
+  <p>{{ error.message }}</p>
+  <p class="button-row">
+    <a class="button" href="{{ retry_url }}">Try again</a>
+    <a class="button button-secondary" href="{% url 'weather:search' %}">Search again</a>
+  </p>
+</div>
+{% elif report.is_stale %}
+<div class="alert alert-warning" role="status">
+  <p>We couldn't reach the weather service, so this is the last weather we loaded for this location.
+     Last updated <time datetime="{{ report.fetched_at|date:'c' }}">{{ report.fetched_at|date:"j M Y, H:i T" }}</time>.</p>
+  <p><a class="button button-secondary" href="{{ retry_url }}">Try again</a></p>
+</div>
+{% endif %}
+
+<section class="card" aria-labelledby="location-heading">
+  <h1 id="location-heading">{{ label }}</h1>
+  {% if report %}
+  {% with current=report.current %}
+  <div class="weather-summary">
+    <p class="temperature-now">{{ current.temperature|floatformat:"0" }}°C</p>
+    <div>
+      {% if current.description %}<p class="conditions">{{ current.description }}</p>{% endif %}
+      {% if current.feels_like is not None %}<p class="hint">Feels like {{ current.feels_like|floatformat:"0" }}°C</p>{% endif %}
+    </div>
+  </div>
+  <p class="hint">
+    {% if not report.is_stale %}Last updated <time datetime="{{ report.fetched_at|date:'c' }}">{{ report.fetched_at|date:"j M Y, H:i T" }}</time>.{% endif %}
+    Latitude {{ location.lat }}, longitude {{ location.lon }}.
+  </p>
+  {% endwith %}
+  {% else %}
+  <p class="hint">Latitude {{ location.lat }}, longitude {{ location.lon }}.</p>
+  {% endif %}
+</section>
+
+{% if report %}
+{% with current=report.current %}
+<section class="card" aria-labelledby="details-heading">
+  <h2 id="details-heading">Current conditions</h2>
+  <dl class="detail-grid">
+    <div class="detail">
+      <dt>Feels like</dt>
+      <dd>{% if current.feels_like is not None %}{{ current.feels_like|floatformat:"0" }}°C{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Humidity</dt>
+      <dd>{% if current.humidity is not None %}{{ current.humidity }}%{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Wind speed</dt>
+      <dd>{% if current.wind_speed is not None %}{{ current.wind_speed|floatformat:1 }} m/s{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>UV index</dt>
+      <dd>{% if current.uv_index is not None %}{{ current.uv_index|floatformat:1 }}{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Cloud cover</dt>
+      <dd>{% if current.cloud_cover is not None %}{{ current.cloud_cover }}%{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Pressure</dt>
+      <dd>{% if current.pressure is not None %}{{ current.pressure }} hPa{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Sunrise <span class="hint-inline">(local time)</span></dt>
+      <dd>{% if current.sunrise %}<time>{{ current.sunrise|time:"H:i" }}</time>{% else %}Not available{% endif %}</dd>
+    </div>
+    <div class="detail">
+      <dt>Sunset <span class="hint-inline">(local time)</span></dt>
+      <dd>{% if current.sunset %}<time>{{ current.sunset|time:"H:i" }}</time>{% else %}Not available{% endif %}</dd>
+    </div>
+  </dl>
+</section>
+{% endwith %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

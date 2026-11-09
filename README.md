@@ -20,7 +20,8 @@ full feature list and `HANDOFF.md` for current progress.
 config/            Django settings and root URLs
 weather/           Weather app
   openweather.py   Backend OpenWeather HTTP client (the only code that calls OpenWeather)
-  services.py      Weather service: location lookup (caching comes later)
+  services.py      Weather service: location lookup, current weather, 10-minute cache
+                   with stale fallback (Django local-memory cache)
   views.py         Input validation and rendering
   templates/       Page templates
   tests/           Offline tests (OpenWeather is always mocked)
@@ -64,7 +65,8 @@ static/css/        Shared dark theme (theme.css)
 uv run python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and search for a city such as "Paris".
+Open http://127.0.0.1:8000/ and search for a city such as "Paris", then
+select a result to open its current-weather dashboard.
 
 ## Test
 

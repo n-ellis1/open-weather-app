@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load l10n %}
 
 {% block title %}{% if query %}{{ query }} – {% endif %}Search locations · Open Weather{% endblock %}
 
@@ -33,8 +34,10 @@
   <ul class="result-list">
     {% for location in results %}
     <li class="result-item">
-      <div class="result-name">{{ location.label }}</div>
-      <div class="result-meta">Latitude {{ location.lat }}, longitude {{ location.lon }}</div>
+      <a class="result-link" href="{% url 'weather:dashboard' %}?lat={{ location.lat|unlocalize }}&amp;lon={{ location.lon|unlocalize }}&amp;name={{ location.name|urlencode }}&amp;state={{ location.state|urlencode }}&amp;country={{ location.country_code|urlencode }}">
+        <span class="result-name">{{ location.label }}</span>
+        <span class="result-meta">Latitude {{ location.lat }}, longitude {{ location.lon }}</span>
+      </a>
     </li>
     {% endfor %}
   </ul>

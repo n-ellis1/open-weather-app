@@ -1,5 +1,7 @@
+from datetime import datetime
 from unittest import mock
 
+from django.core.cache import cache
 from django.test import SimpleTestCase
 
 from weather import services
@@ -48,3 +50,37 @@ class SearchLocationsTests(SimpleTestCase):
 
         with self.assertRaises(OpenWeatherError):
             services.search_locations("Paris")
+
+
+class CurrentWeatherServiceTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        patcher = mock.patch("weather.services.get_client")
+        self.client_mock = patcher.start().return_value
+        self.addCleanup(patcher.stop)
+
+    def test_coordinates_are_rounded_so_nearby_requests_share_the_cache(self):
+        self.client_mock.current_weather.return_value = {"main": {"temp": 12.5}}
+
+        first = services.get_current_weather(33.66179, -95.555513)
+        second = services.get_current_weather("33.6618", "-95.5555")
+
+        self.client_mock.current_weather.assert_called_once_with(33.6618, -95.5555)
+        self.assertEqual(first, second)
+        self.assertFalse(second.is_stale)
+
+    def test_response_without_temperature_raises(self):
+        for raw in ({}, [], {"main": {}}, {"main": {"temp": "warm"}}, {"main": {"temp": True}}):
+            with self.subTest(raw=raw):
+                with self.assertRaises(OpenWeatherError):
+                    services.parse_current_weather(raw)
+
+    def test_sunrise_and_sunset_use_the_locations_utc_offset(self):
+        current = services.parse_current_weather(
+            {"main": {"temp": 1}, "sys": {"sunrise": 1794227400, "sunset": 1794266100}, "timezone": 3600}
+        )
+
+        self.assertEqual(current.sunrise, datetime(2026, 11, 9, 13, 30))
+        self.assertEqual(current.sunset, datetime(2026, 11, 10, 0, 15))
+        self.assertIsNone(current.sunrise.tzinfo)

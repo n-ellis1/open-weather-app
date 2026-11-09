@@ -1,29 +1,32 @@
 # Weather App Handoff
 
 ## Current status (2026-11-09)
-Milestone done: Django/uv/SQLite setup + city search with multiple matches (FR-4 city part, FR-5). Uncommitted, awaiting review.
+Milestone done: search result → current-weather dashboard (FR-7) with 10-minute cache and stale fallback (NFR-1, NFR-3). Uncommitted, awaiting review. Previous milestone (setup + city search, FR-4 city part, FR-5) is committed in `39f48ab`.
 
 What changed:
-- uv project (`pyproject.toml`, `uv.lock`), Django 6.1.3, SQLite. Project `config/`, app `weather/`.
-- `config/settings.py` loads a root `.env` (small built-in loader, no extra dependency). Reads `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `OPENWEATHER_API_KEY`, `OPENWEATHER_TIMEOUT_SECONDS`. Without a secret key and with debug on, it uses a dev-only key. With debug off, a missing key raises an error.
-- `weather/openweather.py`: backend client using stdlib `urllib` with a timeout (no `requests`/`httpx` dependency). `geocode_city()` calls `/geo/1.0/direct` (limit 5). It raises `MissingAPIKeyError` before any request when no key is set, and `OpenWeatherError` on HTTP, network, timeout, or bad JSON. Errors and logs never include the URL or key (`from None`).
-- `weather/services.py`: `get_client()`, `Location` dataclass with `label` ("City, State, Country"), `search_locations()` (removes duplicate and malformed matches). `weather/countries.py` maps ISO codes to country names and falls back to the code.
-- `weather/views.py` `search` at `/`: GET `?q=`. Handles empty, too long (>100 chars), missing key (clear message), upstream error (message + "Try again" link + search form), and no matches.
-- Templates: `templates/base.html` (skip link, header), `weather/templates/weather/search.html`.
-- README.md, `.gitignore` (excludes `.env`, `db.sqlite3`, `.venv`), and `.env.example` (placeholders only).
+- `weather/openweather.py`: `current_weather(lat, lon)` calls `/data/2.5/weather?units=metric` through the same key-safe `_get_json`.
+- `weather/services.py`:
+  - `CurrentWeather` and `WeatherReport(current, fetched_at, is_stale)` dataclasses.
+  - `parse_current_weather()` requires only `main.temp` (otherwise raises `OpenWeatherError`). Other fields are `None` when missing. Sunrise and sunset are naive local times using the response's `timezone` offset.
+  - `get_current_weather(lat, lon)` rounds coordinates to 4 decimals, uses cache key `weather:current:{lat}:{lon}`, and reuses an entry for less than `WEATHER_FRESH_FOR` (10 min). When a refresh fails (`OpenWeatherError`, `MissingAPIKeyError`, or a malformed payload), it returns the cached entry with `is_stale=True`. With no cached entry, it re-raises. Entries are kept for `WEATHER_KEEP_FOR` (24 h). `services.now()` is the clock that tests patch.
+- `weather/views.py` `dashboard` at `/weather/?lat&lon&name&state&country`: validates the coordinate range and finiteness and the name/state length (100); otherwise it returns 400 with "Choose a location from the search results". It returns 503 with an error, "Try again" (same URL), and "Search again" when there's no data. The label comes from the query params and falls back to the response `name`, then to the coordinates.
+- `weather/templates/weather/dashboard.html` (new) and the search results now link to the dashboard (lat/lon via `unlocalize`). `theme.css` gained `.result-link`, `.button-row`, `.weather-summary`, `.temperature-now`, `.detail-grid`/`.detail`.
+- `config/settings.py`: explicit `CACHES` (LocMemCache, 1000 entries). README layout/run notes updated.
 
 ## Decisions
-- **Dark theme:** `static/css/theme.css` is the one shared stylesheet. Colors and spacing are CSS custom properties on `:root` with AA-contrast text. It sets a yellow `:focus-visible` outline (3px) on all controls, uses labeled inputs with hints, and includes reusable `.card`, `.button`/`.button-secondary`, `.alert-error`/`.alert-warning`, `.result-list`/`.result-item`, `.visually-hidden`, and a mobile breakpoint that stacks `.field-row`. The dashboard should extend `base.html` and reuse these tokens and classes. It does not follow the OS light/dark preference; the app is dark only for now.
-- Search results show full country names (FR-5) plus lat/lon as extra distinguishing details. The service carries coordinates for use in later weather lookups.
-- Results are plain text for now; they don't link anywhere yet.
-- Tests patch `weather.services.get_client` (view/service) or pass an `opener` / patch `weather.openweather.urlopen` (client).
+- **No UV index yet:** `/data/2.5/weather` (works with any free key) doesn't return UV, so the dashboard shows "UV index: Not available". Getting UV (FR-7) and daily highs/lows (FR-8) needs One Call 3.0 (`/data/3.0/onecall`), which requires a separate OpenWeather "One Call by Call" subscription. **Ask the user** whether to switch before building the forecast.
+- Temperatures are stored in metric (°C, m/s) and rounded to whole degrees for display. FR-3 unit conversion should happen at display time.
+- The cache is per process and in memory, so a restart clears the stale fallback. Switch to a database or file cache if the fallback must survive restarts.
+- "Last updated" is shown in server time (UTC) with a `<time datetime>` attribute. The stale banner uses `role="status"`, and errors use `role="alert"`.
+- Dark theme: reuse `static/css/theme.css` tokens and classes and extend `base.html`. The app is dark only.
+- Tests patch `weather.services.get_client` and `weather.services.now`, and call `cache.clear()` in setUp.
 
 ## Verification
-- TDD: wrote `test_search_for_paris_lists_texas_and_france_as_distinct_results` first. It failed as expected (`geocode_city` called 0 times), then passed after implementation.
-- `uv run python manage.py test` → 18 tests, OK (offline).
-- `uv run python manage.py check` → no issues. Live smoke test on runserver without a key: `/?q=Paris` showed the missing-key message, and `theme.css` returned 200.
+- TDD: the dashboard tests failed first (no service/view), then passed. The caching tests then failed as expected (`2 != 1` calls, 503 instead of stale fallback) before the cache was added.
+- `uv run python manage.py test` → 39 tests, OK (offline).
+- `uv run python manage.py check` → no issues. Runserver smoke test without a key: the dashboard returned 503 with the missing-key message, an invalid location returned 400, and `theme.css` returned 200.
 - Not yet tested against the real OpenWeather API (no key yet).
 
 ## Next task (proposed)
-- Select a search result to open a weather dashboard for its coordinates showing current weather (FR-7) via the weather service, with 10-minute cache reuse and stale fallback (NFR-1, NFR-3). Mock the client and use a controlled clock in tests.
-- Small follow-ups to consider: ZIP/postal code search (FR-4, `/geo/1.0/zip`), and a live check of search once the API key is added.
+- Resolve the One Call 3.0 question above, then build the multi-day forecast with an interactive chart and per-day text details (FR-8) on the dashboard, cached like current weather.
+- Small follow-ups: ZIP/postal code search (FR-4, `/geo/1.0/zip`); a live check of search and the dashboard once the API key is added.

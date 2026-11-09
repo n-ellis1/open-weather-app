@@ -14,6 +14,7 @@ from urllib.request import urlopen
 logger = logging.getLogger(__name__)
 
 GEOCODING_DIRECT_URL = "https://api.openweathermap.org/geo/1.0/direct"
+CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 
 
 class OpenWeatherError(Exception):
@@ -33,6 +34,10 @@ class OpenWeatherClient:
     def geocode_city(self, query, limit=5):
         """Return raw OpenWeather geocoding matches for a city name."""
         return self._get_json(GEOCODING_DIRECT_URL, {"q": query, "limit": limit})
+
+    def current_weather(self, lat, lon):
+        """Return raw OpenWeather current weather for coordinates, in metric units."""
+        return self._get_json(CURRENT_WEATHER_URL, {"lat": lat, "lon": lon, "units": "metric"})
 
     def _get_json(self, base_url, params):
         if not self.api_key:

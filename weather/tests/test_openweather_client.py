@@ -33,6 +33,30 @@ class OpenWeatherClientTests(SimpleTestCase):
         )
         self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
 
+    def test_current_weather_requests_metric_weather_for_coordinates(self):
+        opener = mock.Mock(return_value=fake_response({"main": {"temp": 12}}))
+        client = OpenWeatherClient(api_key="test-key", timeout=3, opener=opener)
+
+        result = client.current_weather(33.6618, -95.5555)
+
+        self.assertEqual(result, {"main": {"temp": 12}})
+        parts = urlsplit(opener.call_args.args[0])
+        self.assertEqual(parts.netloc, "api.openweathermap.org")
+        self.assertEqual(parts.path, "/data/2.5/weather")
+        self.assertEqual(
+            parse_qs(parts.query),
+            {"lat": ["33.6618"], "lon": ["-95.5555"], "units": ["metric"], "appid": ["test-key"]},
+        )
+        self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
+
+    def test_current_weather_without_key_makes_no_request(self):
+        opener = mock.Mock()
+        client = OpenWeatherClient(api_key="", opener=opener)
+
+        with self.assertRaises(MissingAPIKeyError):
+            client.current_weather(1, 2)
+        opener.assert_not_called()
+
     def test_missing_key_raises_without_making_a_request(self):
         opener = mock.Mock()
         client = OpenWeatherClient(api_key="", opener=opener)

@@ -108,6 +108,17 @@ DATABASES = {
 }
 
 
+# Server-side weather cache (NFR-1, NFR-3). Local memory is per process and
+# is cleared on restart, which is fine for local development.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "open-weather",
+        "OPTIONS": {"MAX_ENTRIES": 1000},
+    }
+}
+
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

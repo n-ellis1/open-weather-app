@@ -238,14 +238,97 @@ select:focus-visible {
   padding: var(--space-3) var(--space-4);
 }
 
+.result-item:has(.result-link) {
+  padding: 0;
+}
+
+.result-link {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.result-link:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.result-link:hover .result-name {
+  color: var(--color-accent-strong);
+  text-decoration: underline;
+}
+
 .result-name {
+  display: block;
   font-weight: 600;
   font-size: 1.05rem;
+  color: var(--color-accent);
 }
 
 .result-meta {
+  display: block;
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Weather dashboard */
+.weather-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+}
+
+.weather-summary p {
+  margin: 0;
+}
+
+.temperature-now {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.conditions {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.detail {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+}
+
+.detail dt {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.detail dd {
+  margin: var(--space-1) 0 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.hint-inline {
+  font-size: 0.8rem;
 }
 
 .visually-hidden {
