@@ -1,0 +1,76 @@
+# Open Weather App
+
+A weather web app for finding a location, viewing its current weather and
+forecast, and saving places you check often. See `REQUIREMENTS.md` for the
+full feature list and `HANDOFF.md` for current progress.
+
+## Tech stack
+
+- **Python 3.13+** managed with **uv**
+- **Django 6.1** with server-rendered Django templates
+- **SQLite** for users, temperature preferences, and favorites
+- **Django authentication** for registration and sign-in
+- **JavaScript** (planned) for browser geolocation, the interactive forecast, and the map
+- **OpenWeather** as the weather provider, called only from the backend
+  (`weather/openweather.py`) using Python's standard-library HTTP client with a timeout
+
+## Project layout
+
+```
+config/            Django settings and root URLs
+weather/           Weather app
+  openweather.py   Backend OpenWeather HTTP client (the only code that calls OpenWeather)
+  services.py      Weather service: location lookup (caching comes later)
+  views.py         Input validation and rendering
+  templates/       Page templates
+  tests/           Offline tests (OpenWeather is always mocked)
+templates/         Shared base template
+static/css/        Shared dark theme (theme.css)
+```
+
+## Setup
+
+1. Install [uv](https://docs.astral.sh/uv/).
+2. Install dependencies (uv also installs a compatible Python if needed):
+
+   ```
+   uv sync
+   ```
+
+3. Create your local environment file:
+
+   ```
+   cp .env.example .env        # macOS/Linux
+   Copy-Item .env.example .env # Windows PowerShell
+   ```
+
+   Edit `.env` and set `DJANGO_SECRET_KEY` and `OPENWEATHER_API_KEY`.
+   `.env` is gitignored, so keep real secrets only there.
+
+   The app and the tests run without an OpenWeather key. Without one,
+   searches show a message explaining that live search needs a key. With
+   `DJANGO_DEBUG=true` and no `DJANGO_SECRET_KEY`, a development-only
+   secret key is used.
+
+4. Create the SQLite database:
+
+   ```
+   uv run python manage.py migrate
+   ```
+
+## Run
+
+```
+uv run python manage.py runserver
+```
+
+Open http://127.0.0.1:8000/ and search for a city such as "Paris".
+
+## Test
+
+```
+uv run python manage.py test
+```
+
+Tests run offline. View and service tests mock the OpenWeather client, and
+client tests mock the HTTP transport, so no API key or network is needed.

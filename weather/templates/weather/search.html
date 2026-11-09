@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{% if query %}{{ query }} – {% endif %}Search locations · Open Weather{% endblock %}
+
+{% block content %}
+<section class="card" aria-labelledby="search-heading">
+  <h1 id="search-heading">Find a location</h1>
+  <form class="search-form" method="get" action="{% url 'weather:search' %}" role="search">
+    <label for="location-query">City name</label>
+    <div class="field-row">
+      <input id="location-query" name="q" type="search" value="{{ query }}"
+             required maxlength="100" autocomplete="off" aria-describedby="location-query-hint">
+      <button type="submit" class="button">Search</button>
+    </div>
+    <p id="location-query-hint" class="hint">For example: Paris, Springfield, or Tokyo.</p>
+  </form>
+</section>
+
+{% if error %}
+<div class="alert alert-error" role="alert">
+  <p>{{ error.message }}</p>
+  {% if error.kind == "upstream" %}
+  <p><a class="button button-secondary" href="{% url 'weather:search' %}?q={{ query|urlencode }}">Try again</a></p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if searched %}
+<section class="card" aria-labelledby="results-heading">
+  <h2 id="results-heading">Results for “{{ query }}”</h2>
+  {% if results %}
+  <p class="hint" aria-live="polite">{{ results|length }} matching location{{ results|length|pluralize }}.</p>
+  <ul class="result-list">
+    {% for location in results %}
+    <li class="result-item">
+      <div class="result-name">{{ location.label }}</div>
+      <div class="result-meta">Latitude {{ location.lat }}, longitude {{ location.lon }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p aria-live="polite">No locations matched “{{ query }}”. Check the spelling or try a nearby city.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
