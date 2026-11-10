@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 GEOCODING_DIRECT_URL = "https://api.openweathermap.org/geo/1.0/direct"
 GEOCODING_ZIP_URL = "https://api.openweathermap.org/geo/1.0/zip"
 CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
 
 
 class OpenWeatherError(Exception):
@@ -47,6 +48,10 @@ class OpenWeatherClient:
     def current_weather(self, lat, lon):
         """Return raw OpenWeather current weather for coordinates, in metric units."""
         return self._get_json(CURRENT_WEATHER_URL, {"lat": lat, "lon": lon, "units": "metric"})
+
+    def forecast(self, lat, lon):
+        """Return the raw 5-day / 3-hour forecast for coordinates, in metric units."""
+        return self._get_json(FORECAST_URL, {"lat": lat, "lon": lon, "units": "metric"})
 
     def _get_json(self, base_url, params):
         if not self.api_key:

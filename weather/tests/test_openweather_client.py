@@ -54,6 +54,22 @@ class OpenWeatherClientTests(SimpleTestCase):
         )
         self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
 
+    def test_forecast_requests_metric_five_day_forecast_for_coordinates(self):
+        opener = mock.Mock(return_value=fake_response({"list": []}))
+        client = OpenWeatherClient(api_key="test-key", timeout=3, opener=opener)
+
+        result = client.forecast(33.6618, -95.5555)
+
+        self.assertEqual(result, {"list": []})
+        parts = urlsplit(opener.call_args.args[0])
+        self.assertEqual(parts.netloc, "api.openweathermap.org")
+        self.assertEqual(parts.path, "/data/2.5/forecast")
+        self.assertEqual(
+            parse_qs(parts.query),
+            {"lat": ["33.6618"], "lon": ["-95.5555"], "units": ["metric"], "appid": ["test-key"]},
+        )
+        self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
+
     def test_geocode_zip_requests_zip_geocoding_with_country(self):
         opener = mock.Mock(return_value=fake_response({"zip": "E14", "name": "London"}))
         client = OpenWeatherClient(api_key="test-key", timeout=3, opener=opener)

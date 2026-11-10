@@ -1,41 +1,62 @@
 # Weather App Handoff
 
 ## Current status (2026-11-09)
-Milestone done: Task 5, favorite locations (FR-9, FR-10, FR-11). The changes are uncommitted and awaiting review. Task 4 (accounts, °C/°F preference) is committed in `159a8dd`.
+Milestone done: Task 6, interactive forecast (FR-8) and map (FR-12). The changes are uncommitted and awaiting review. Task 5 (favorites) is committed in `8cad647`.
 
 What changed:
-- New `favorites` app, added to `INSTALLED_APPS` and mounted at `/favorites/`. Its migration is `favorites/migrations/0001_initial.py`, so run `migrate` on existing databases.
-- `favorites/models.py`:
-  - `SavedLocation`: name, state, country_code, plus `lat`/`lon` stored as 4-decimal `DecimalField`s. They're unique together, so places are matched by coordinates.
-  - `Favorite`: user FK + location FK, unique per (user, location). Rows are shared between users, and each user links to them through their own `Favorite`.
-  - Helpers: `save_favorite(user, location)` (get-or-create; fills in a blank name), `favorite_coordinates(user)`, and `remove_favorite(fav)` (also deletes a `SavedLocation` once nobody has it saved). `SavedLocation.dashboard_query` builds the dashboard link.
-- `favorites/views.py`:
-  - `favorite_list`: `@login_required`. Filtered by `request.user` and makes no OpenWeather calls.
-  - `save`: `@require_POST` + `@login_required` + CSRF. Validates input with `weather.views.location_from_params` (400 on bad coordinates), shows a success or "already in your favorites" message, and redirects to a same-host `next` (otherwise to Favorites).
-  - `remove`: `@require_POST` + `@login_required` + CSRF. Uses `get_object_or_404(..., user=request.user)`, so another user's id returns 404.
-- Renamed for reuse: `accounts.views._safe_next` → `safe_next`, and `weather.views._location_from_params` → `location_from_params`.
-- `weather/views.py` passes `saved_coordinates` to the search and dashboard pages. The dashboard also passes `favorite_location`, which uses the report's place name when the URL has none (device location).
-- Templates:
-  - Search results: each result has a "☆ Save" form for signed-in users (with visually hidden "<label> to favorites"), or "★ Saved" if already saved. Guests see a sign-in hint.
-  - Dashboard: "Save to favorites", or "★ In your favorites · View favorites". This shows even when weather fails to load.
-  - `favorites/list.html`: links to the dashboard plus a Remove button per row, and an empty state that links to search.
-  - Shared hidden fields are in `favorites/_location_fields.html`.
-  - `base.html`: a "Favorites" header link for signed-in users (`aria-current` on that page), and Django messages rendered in a `role="status"` region.
-- `theme.css`: `.result-action`, `.favorite-action`, `.saved-badge`, `.alert-success/info`, `.messages`, all built from existing tokens. README is updated.
+- `weather/openweather.py`: `OpenWeatherClient.forecast(lat, lon)` calls the free `/data/2.5/forecast` (5 days in 3-hour steps, metric). One Call isn't used.
+- `weather/services.py`:
+  - `_cached_report(kind, lat, lon, load)` is the shared cache policy (10 minutes fresh, stale fallback kept for 24 h). `get_current_weather` now uses it too, with an unchanged cache key (`weather:current:…`). Forecasts use `weather:forecast:…`.
+  - `parse_forecast(raw)` groups samples by local date (UTC `dt` + `city.timezone`). Each day's high is the max `temp_max` and its low the min `temp_min` (falling back to `temp`), and its conditions are the most common description. Bad samples are skipped, and no usable samples raises `OpenWeatherError`. A `DailyForecast` is partial when it has fewer than 8 samples.
+  - `get_forecast(lat, lon)` returns a `ForecastReport(days, fetched_at, is_stale)`.
+- `accounts/templatetags/temperature.py`: new `convert_temperature(celsius, unit)`, also used by the `temperature` filter.
+- `weather/views.py`: the dashboard requests the forecast only after current weather (fresh or stale) loads. Forecast errors, including a missing key, set `forecast_error` and the page still returns 200. Context: `forecast`, `forecast_chart` (numbers already in the viewer's unit for JS) and `map_data` (lat, lon, name, "Clear sky, 31°C" or "").
+- `dashboard.html`:
+  - The "5-day forecast" card has a server-rendered text panel per day (heading, High/Low, conditions, "Partial day: estimated from N of 8 forecast times"). Without JS, every panel shows.
+  - The chart, legend, and day tablist are `hidden` until JS turns them on.
+  - The Map card is followed by `json_script` data.
+  - Leaflet CSS/JS come from unpkg with SRI (hashes checked against the CDN files) and load only on valid dashboards.
+- `base.html`: new `{% block head %}`.
+- `static/js/forecast-chart.js`:
+  - Draws an SVG chart: a solid orange line for highs and a dashed blue line for lows, using the dataviz reference palette's validated dark pair. The palette validator wasn't run because Node isn't installed.
+  - Selected-day labels and a hover tooltip.
+  - Days can be selected by clicking a column, or through an ARIA tablist with arrow/Home/End keys that switches the text panel.
+- `static/js/weather-map.js`:
+  - Leaflet map at zoom 10 on the coordinates, with OSM tiles and "© OpenStreetMap contributors" attribution (from `data-` attributes).
+  - A keyboard-focusable marker whose popup is built with `textContent`.
+  - The scroll wheel zooms only after the map is focused or clicked.
+- **Tile 403 fix (after the first browser check):** Edge showed OSM "Access blocked" tiles on 127.0.0.1.
+  - Cause: Django's default `SECURE_REFERRER_POLICY = "same-origin"` strips the Referer from cross-origin tile requests. OSM's tile policy requires a valid Referer and forbids a restrictive Referrer-Policy.
+  - Fix, scoped to the map: the Leaflet tile layer now sets `referrerPolicy: "strict-origin-when-cross-origin"`, so tiles send only the origin. The site-wide header is unchanged, and a test pins it.
+  - A hidden `.map-tile-error` notice appears on Leaflet `tileerror` and hides after a batch loads cleanly.
+  - OSM's "Access blocked" tiles arrive as normal images, so that case can't be detected in JS.
+- `theme.css`: chart/tab/map/Leaflet dark styles and the `--color-chart-high/low` tokens. README and AGENTS.md now list the Leaflet/OSM stack.
 
 ## Decisions
-- **Still open: One Call 3.0.** `/data/2.5/weather` has no UV index, and daily highs/lows (FR-8) need either `/data/3.0/onecall` (separate subscription) or the free `/data/2.5/forecast` (5 days in 3-hour steps, so daily high/low has to be aggregated). Ask the user before building the forecast.
-- When the forecast is built, render its temperatures with `|temperature:temperature_unit` and pass the unit to the chart JS from the template. Keep cached data in metric.
-- Favorites store the label at save time. Same coordinates mean the same favorite, even with a different label (the first name wins, and a blank name is filled in later). Saving from search re-runs the search on redirect, which costs one geocode call. Geocoding isn't cached.
-- The dashboard is still public by coordinates. Only the favorites list and changes require sign-in.
-- Carried over: guests always see °C. Accounts are username + password. A two-letter qualifier is read as a US state. JS isn't unit-tested (no Node). The cache is LocMemCache. The app is dark only. Tests patch `weather.services.get_client` / `weather.services.now` and call `cache.clear()`. The `MAILERS` setting is unused.
+- The forecast is not fetched when current weather fails with no cache. This avoids a second timeout and keeps the error page simple.
+- No OpenWeather weather-tile overlay on the map. The marker popup covers FR-12, and an overlay would need a backend tile proxy to keep the key private. Possible follow-up.
+- Day labels use the location's local date, and "today" isn't singled out. The first and last days are usually partial.
+- Carried over: UV index stays "Not available" (2.5 API). Guests see °C. Cached data is metric. LocMemCache. Dark-only theme. JS isn't unit-tested (no Node). Tests patch `weather.services.get_client` / `weather.services.now` and call `cache.clear()`.
 
 ## Verification
-- TDD: `favorites/tests/test_favorites.py` (37 tests) failed first with `ModuleNotFoundError: favorites.models`, then passed. They cover saving from search and from the dashboard (including device location and weather errors), the already-saved state, duplicate and re-rounded saves, same name with different coordinates, two users saving one place, list isolation, the header link, opening the correct location (the dashboard calls OpenWeather with the favorite's coordinates), removal, another user's id → 404, guest redirects, GET → 405, missing CSRF → 403, invalid coordinates → 400, a posted `user` field ignored, and open-redirect protection.
-- `uv run python manage.py test` → 139 tests, OK (offline).
+- Tile fix TDD: 3 map tests (hidden fallback notice with attribution, unchanged site-wide `same-origin`, map script's `referrerPolicy`/`tileerror`) failed first, then passed.
+- TDD: `weather/tests/test_forecast.py` (originally 25 tests) and a new client test first failed because the forecast client method, parser, and template sections were missing. All now pass. They cover local-date grouping (UTC−6 and +5:30), estimated high/low from `temp_max`/`temp_min`, partial-day labels, conditions, skipped/malformed samples, the 10-minute cache, stale fallback, separate current/forecast caches, °F conversion in text and chart data, forecast failure, a malformed forecast, and a missing key while current weather stays usable. They also cover the map's center, marker data, unit, Leaflet SRI, OSM attribution, the map shown when weather fails, and the API key absent from the page.
+- `uv run python manage.py test` → 168 tests, OK (offline).
 - `uv run python manage.py check` → no issues. `makemigrations --check` → no changes.
-- Not yet clicked through in a real browser, and not run against the live API (no key yet).
+- Browser (user, Edge InPrivate): the marker and popup work, and the tiles were 403 before the fix. The tile fix hasn't been rechecked in the browser. The chart hasn't been checked with a live key.
+
+## Browser checklist (needs a key)
+1. Dashboard for "Paris, Texas": the chart draws with High/Low legend, the first day is selected, and the first and last days say "partial".
+2. Clicking a chart column or day button updates the text panel. Tab reaches the day buttons, ←/→/Home/End move between days, and focus is visible.
+3. Hovering a column shows a tooltip that stays inside the card. Resize to phone width: the day buttons fit and the chart redraws.
+4. Switch to °F: the chart, buttons, panels, and map popup all show °F.
+5. Map: tiles load, centered on the city. Drag/keyboard pan and +/− zoom work. The marker opens (click or Enter) with the name and conditions. The attribution is visible.
+6. DevTools Network/console: no errors, no SRI block, and no request to openweathermap.org from the browser.
+7. Tiles: the Network panel shows each `tile.openstreetmap.org` request with `Referer: http://127.0.0.1:8000/` and status 200. Going offline after load and panning shows the "Map tiles couldn't load" notice.
 
 ## Next task
-- Task 6: interactive multi-day forecast (FR-8) and weather map (FR-12). First ask the user which forecast endpoint to use (One Call 3.0 vs free 5-day/3-hour). The forecast needs a chart with keyboard-selectable days, a text table of each day's high/low/conditions, cached forecast data with the same 10-minute and stale-fallback rules, and the user's °C/°F unit. The map needs a library choice (e.g. Leaflet + OpenStreetMap tiles, which is a new dependency, so ask), centered on the selected location with a marker popup showing the name and current conditions. Weather tiles must be proxied so the API key never reaches the browser. Test first.
-- Follow-up: once the API key is in `.env`, a live check of search, saving from search results, and the unit toggle.
+- Task 7: live API verification and demo prep. Add `OPENWEATHER_API_KEY` to `.env`, then:
+  - Run the browser checklist above.
+  - Live-check search (city, ambiguous, ZIP), device location, saving from search results, favorites, the unit toggle, and stale fallback (e.g. with the network off after a load).
+  - Confirm the real `/data/2.5/forecast` shape matches the parser (`city.timezone`, `temp_min`/`temp_max`).
+  - Fix anything found test-first, then prepare a short demo script.

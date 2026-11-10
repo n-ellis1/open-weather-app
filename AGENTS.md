@@ -2,7 +2,7 @@
 
 ## Stack and scope
 
-- Use Python, Django, SQLite, and uv. Render pages with Django templates and use JavaScript for browser geolocation, the interactive forecast, and the map.
+- Use Python, Django, SQLite, and uv. Render pages with Django templates and use JavaScript for browser geolocation, the interactive forecast, and the map. The map uses Leaflet 1.9.4 (unpkg, with SRI) and OpenStreetMap tiles.
 - Use Django authentication for registration and sign-in. Keep the user's temperature preference and favorites in SQLite. Each favorite belongs to one user and references one location.
 - Follow the documented FR-1 through FR-12 and NFR-1 through NFR-4. Ask before changing a requirement or adding a major dependency.
 

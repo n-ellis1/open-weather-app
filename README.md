@@ -10,8 +10,10 @@ full feature list and `HANDOFF.md` for current progress.
 - **Django 6.1** with server-rendered Django templates
 - **SQLite** for users, temperature preferences, and favorites
 - **Django authentication** for registration and sign-in
-- **JavaScript** for browser geolocation ("Use my location"); the interactive
-  forecast and the map are planned
+- **JavaScript** for browser geolocation ("Use my location"), the interactive
+  forecast chart (hand-drawn SVG, no chart library), and the map
+- **Leaflet 1.9.4** (loaded from unpkg with Subresource Integrity) and
+  **OpenStreetMap** tiles for the weather map
 - **OpenWeather** as the weather provider, called only from the backend
   (`weather/openweather.py`) using Python's standard-library HTTP client with a timeout
 
@@ -21,8 +23,9 @@ full feature list and `HANDOFF.md` for current progress.
 config/            Django settings and root URLs
 weather/           Weather app
   openweather.py   Backend OpenWeather HTTP client (the only code that calls OpenWeather)
-  services.py      Weather service: location lookup, current weather, 10-minute cache
-                   with stale fallback (Django local-memory cache)
+  services.py      Weather service: location lookup, current weather, 5-day forecast
+                   grouped by local date, 10-minute cache with stale fallback
+                   (Django local-memory cache)
   views.py         Input validation and rendering
   templates/       Page templates
   tests/           Offline tests (OpenWeather is always mocked)
@@ -35,7 +38,8 @@ favorites/         Saved locations (sign-in only)
   views.py         Favorites list, POST save, POST remove (scoped to the signed-in user)
 templates/         Shared base template
 static/css/        Shared dark theme (theme.css)
-static/js/         Browser scripts (current-location.js for "Use my location")
+static/js/         Browser scripts: current-location.js ("Use my location"),
+                   forecast-chart.js (interactive forecast), weather-map.js (Leaflet map)
 ```
 
 ## Setup
@@ -92,6 +96,16 @@ dashboard. **Favorites** in the header lists their saved places; select one
 to open its dashboard, or use **Remove** to delete it. Places are matched by
 coordinates, so Paris, Texas and Paris, France are separate favorites, and
 saving the same place twice keeps a single entry.
+
+Below current conditions, the dashboard shows a **5-day forecast** from
+OpenWeather's free 5-day / 3-hour endpoint. Samples are grouped by the
+location's local date, each day's high and low are estimated from its samples,
+and days the forecast window only partly covers are labelled "Partial day".
+Select a day in the chart or with the day buttons (arrow keys move between
+days) to read its high, low, and conditions. If the forecast can't be loaded,
+current weather still shows. The **map** (Leaflet + OpenStreetMap tiles) is
+centered on the location; select the marker for its name and current
+conditions.
 
 ## Test
 

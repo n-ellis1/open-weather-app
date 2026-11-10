@@ -1,8 +1,9 @@
 """Weather service: location lookup, weather retrieval, and caching."""
 
 import math
+from collections import Counter
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from django.conf import settings
 from django.core.cache import cache
@@ -202,18 +203,19 @@ def parse_current_weather(raw):
     )
 
 
-def get_current_weather(lat, lon):
-    """Return a WeatherReport for coordinates.
+def _cached_report(kind, lat, lon, load):
+    """Shared cache policy for current weather and forecasts.
 
-    Cached weather younger than WEATHER_FRESH_FOR is reused without calling
-    OpenWeather (NFR-1). If a refresh fails, the last successful weather for
+    Reports younger than WEATHER_FRESH_FOR are reused without calling
+    OpenWeather (NFR-1). If a refresh fails, the last successful report for
     the same coordinates is returned with is_stale=True (NFR-3).
 
-    Raises MissingAPIKeyError or OpenWeatherError when the lookup fails and no
-    cached weather exists for these coordinates.
+    `load(lat, lon, fetched_at)` fetches, parses, and builds a new report.
+    Raises MissingAPIKeyError or OpenWeatherError when it fails and nothing
+    is cached for these coordinates.
     """
     lat, lon = round_coordinate(lat), round_coordinate(lon)
-    key = f"weather:current:{lat:.4f}:{lon:.4f}"
+    key = f"weather:{kind}:{lat:.4f}:{lon:.4f}"
     cached = cache.get(key)
     current_time = now()
 
@@ -221,12 +223,113 @@ def get_current_weather(lat, lon):
         return cached
 
     try:
-        current = parse_current_weather(get_client().current_weather(lat, lon))
+        report = load(lat, lon, current_time)
     except OpenWeatherError:
         if cached:
             return replace(cached, is_stale=True)
         raise
 
-    report = WeatherReport(current=current, fetched_at=current_time)
     cache.set(key, report, timeout=WEATHER_KEEP_FOR.total_seconds())
     return report
+
+
+def get_current_weather(lat, lon):
+    """Return a cached-or-fresh WeatherReport for coordinates (see _cached_report)."""
+
+    def load(lat, lon, fetched_at):
+        current = parse_current_weather(get_client().current_weather(lat, lon))
+        return WeatherReport(current=current, fetched_at=fetched_at)
+
+    return _cached_report("current", lat, lon, load)
+
+
+# /data/2.5/forecast has one sample every 3 hours, so a full local day has 8.
+SAMPLES_PER_DAY = 8
+
+
+@dataclass(frozen=True)
+class DailyForecast:
+    """One local day estimated from 3-hourly samples, in metric units."""
+
+    date: date
+    high: float
+    low: float
+    description: str
+    sample_count: int
+
+    @property
+    def is_partial(self):
+        """The forecast window doesn't cover the whole local day (FR-8)."""
+        return self.sample_count < SAMPLES_PER_DAY
+
+    @property
+    def samples_per_day(self):
+        return SAMPLES_PER_DAY
+
+
+@dataclass(frozen=True)
+class ForecastReport:
+    days: tuple
+    fetched_at: datetime
+    is_stale: bool = False
+
+
+def parse_forecast(raw):
+    """Group a /data/2.5/forecast response into days by the location's local date.
+
+    Each day's high/low is estimated from the highest temp_max and lowest
+    temp_min of its samples, and its conditions are the most common
+    description. Samples without a usable time or temperature are skipped.
+
+    Raises OpenWeatherError when no usable samples remain.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("list"), list):
+        raise OpenWeatherError("OpenWeather returned an unexpected forecast response.")
+    city = raw.get("city") if isinstance(raw.get("city"), dict) else {}
+    shift = city.get("timezone")
+
+    grouped = {}
+    for item in raw["list"]:
+        if not isinstance(item, dict) or not isinstance(item.get("main"), dict):
+            continue
+        local = _local_time(item.get("dt"), shift)
+        main = item["main"]
+        temp = _number(main.get("temp"))
+        high = _number(main.get("temp_max"))
+        low = _number(main.get("temp_min"))
+        high = temp if high is None else high
+        low = temp if low is None else low
+        if local is None or high is None or low is None:
+            continue
+        conditions = item.get("weather") if isinstance(item.get("weather"), list) else []
+        first = conditions[0] if conditions and isinstance(conditions[0], dict) else {}
+        grouped.setdefault(local.date(), []).append((high, low, str(first.get("description") or "")))
+
+    if not grouped:
+        raise OpenWeatherError("OpenWeather returned an unexpected forecast response.")
+
+    days = []
+    for day, samples in sorted(grouped.items()):
+        descriptions = Counter(description for _, _, description in samples if description)
+        # most_common keeps first-seen order for ties.
+        description = descriptions.most_common(1)[0][0] if descriptions else ""
+        days.append(
+            DailyForecast(
+                date=day,
+                high=max(high for high, _, _ in samples),
+                low=min(low for _, low, _ in samples),
+                description=description[:1].upper() + description[1:],
+                sample_count=len(samples),
+            )
+        )
+    return tuple(days)
+
+
+def get_forecast(lat, lon):
+    """Return a cached-or-fresh ForecastReport for coordinates (see _cached_report)."""
+
+    def load(lat, lon, fetched_at):
+        days = parse_forecast(get_client().forecast(lat, lon))
+        return ForecastReport(days=days, fetched_at=fetched_at)
+
+    return _cached_report("forecast", lat, lon, load)

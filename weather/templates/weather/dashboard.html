@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load favorites temperature %}
+{% load favorites static temperature %}
 
 {% block title %}{% if invalid %}Location not found{% else %}{{ label }} weather{% endif %} · Open Weather{% endblock %}
 
@@ -117,7 +117,91 @@
   </dl>
 </section>
 {% endwith %}
+
+<section class="card" aria-labelledby="forecast-heading">
+  <h2 id="forecast-heading">5-day forecast</h2>
+  {% if forecast_error %}
+  <div class="alert alert-warning" role="status">
+    <p>{{ forecast_error }}</p>
+    <p><a class="button button-secondary" href="{{ retry_url }}">Try again</a></p>
+  </div>
+  {% elif forecast %}
+  {% if forecast.is_stale %}
+  <p class="alert alert-warning" role="status">We couldn't refresh the forecast. Forecast last updated
+    <time datetime="{{ forecast.fetched_at|date:'c' }}">{{ forecast.fetched_at|date:"j M Y, H:i T" }}</time>.</p>
+  {% endif %}
+  <p class="hint">Daily highs and lows are estimated from 3-hour forecasts, grouped by the location's local date.
+    <span class="forecast-js-hint" hidden>Select a day in the chart or use the day buttons (arrow keys move between days) to read its details.</span></p>
+
+  <div class="forecast-chart" data-forecast-chart hidden>
+    <ul class="chart-legend" aria-hidden="true">
+      <li><span class="legend-swatch legend-high"></span>High</li>
+      <li><span class="legend-swatch legend-low"></span>Low</li>
+    </ul>
+    <div class="chart-plot">
+      <svg class="chart-svg" aria-hidden="true" focusable="false"></svg>
+      <div class="chart-tooltip" hidden></div>
+    </div>
+  </div>
+
+  <div class="forecast-days" role="tablist" aria-label="Forecast days" hidden>
+    {% for day in forecast.days %}
+    <button type="button" class="forecast-day" role="tab" id="forecast-tab-{{ forloop.counter0 }}"
+            aria-controls="forecast-panel-{{ forloop.counter0 }}"
+            aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+            tabindex="{% if forloop.first %}0{% else %}-1{% endif %}">
+      <span class="forecast-day-label">{{ day.date|date:"D j M" }}</span>
+      <span class="forecast-day-temps">{{ day.high|temperature:temperature_unit }} / {{ day.low|temperature:temperature_unit }}</span>
+      {% if day.is_partial %}<span class="forecast-day-note">partial</span>{% endif %}
+    </button>
+    {% endfor %}
+  </div>
+
+  {% for day in forecast.days %}
+  <div class="forecast-panel" role="tabpanel" id="forecast-panel-{{ forloop.counter0 }}"
+       aria-labelledby="forecast-tab-{{ forloop.counter0 }}">
+    <h3>{{ day.date|date:"l j F" }}</h3>
+    <p class="forecast-temps"><span>High {{ day.high|temperature:temperature_unit }}</span>
+      <span>Low {{ day.low|temperature:temperature_unit }}</span></p>
+    <p>{% if day.description %}{{ day.description }}{% else %}Conditions not available{% endif %}</p>
+    <p class="hint">{% if day.is_partial %}Partial day: estimated from {{ day.sample_count }} of {{ day.samples_per_day }} forecast times.{% else %}Estimated from all {{ day.samples_per_day }} forecast times.{% endif %}</p>
+  </div>
+  {% endfor %}
+  {{ forecast_chart|json_script:"forecast-data" }}
+  {% endif %}
+</section>
 {% endif %}
 
+<section class="card" aria-labelledby="map-heading">
+  <h2 id="map-heading">Map</h2>
+  <p class="hint" id="map-help">Drag or use the arrow keys to pan, and the + and − buttons or keys to zoom.
+    Select the marker to see the location name{% if report %} and current conditions{% endif %}.</p>
+  <div id="weather-map" class="weather-map" role="region" aria-label="Map of {{ label }}" aria-describedby="map-help"
+       data-tile-url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+       data-attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'>
+    <p class="map-fallback hint">The map couldn't load. {{ label }} is at latitude {{ location.lat }}, longitude {{ location.lon }}.</p>
+  </div>
+  <p class="map-tile-error alert alert-warning" role="status" hidden>Map tiles couldn't load, so the background map may be blank.
+    The marker still shows {{ label }} at latitude {{ location.lat }}, longitude {{ location.lon }}.
+    Check your connection or browser privacy settings, then <a href="{{ retry_url }}">reload the page</a>.</p>
+  {{ map_data|json_script:"map-data" }}
+</section>
+
+{% endif %}
+{% endblock %}
+
+{% block head %}
+{% if not invalid %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not invalid %}
+{% if forecast %}<script src="{% static 'js/forecast-chart.js' %}" defer></script>{% endif %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+<script src="{% static 'js/weather-map.js' %}" defer></script>
 {% endif %}
 {% endblock %}

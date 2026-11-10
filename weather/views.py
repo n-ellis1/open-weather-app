@@ -6,6 +6,8 @@ from urllib.parse import urlencode
 
 from django.shortcuts import render
 
+from accounts.models import temperature_unit_for
+from accounts.templatetags.temperature import convert_temperature, temperature
 from favorites.models import favorite_coordinates
 
 from . import services
@@ -121,6 +123,37 @@ def location_from_params(params):
     return services.Location(name=name, state=state, country_code=country, lat=lat, lon=lon)
 
 
+def _forecast_context(location, unit):
+    """Forecast template context, or a forecast_error if it can't be loaded."""
+    try:
+        forecast = services.get_forecast(location.lat, location.lon)
+    except OpenWeatherError:  # Includes MissingAPIKeyError.
+        return {
+            "forecast": None,
+            "forecast_error": (
+                "The forecast is unavailable right now. Current weather is still shown above."
+            ),
+        }
+    return {
+        "forecast": forecast,
+        "forecast_error": None,
+        # Numbers for the chart script, already in the viewer's unit.
+        "forecast_chart": {
+            "unit": unit,
+            "days": [
+                {
+                    "label": f"{day.date:%a} {day.date.day} {day.date:%b}",
+                    "high": round(convert_temperature(day.high, unit), 1),
+                    "low": round(convert_temperature(day.low, unit), 1),
+                    "description": day.description,
+                    "partial": day.is_partial,
+                }
+                for day in forecast.days
+            ],
+        },
+    }
+
+
 def dashboard(request):
     location = location_from_params(request.GET)
     if location is None:
@@ -157,6 +190,23 @@ def dashboard(request):
 
     if not context["label"]:
         context["label"] = f"Latitude {location.lat}, longitude {location.lon}"
+    unit = str(temperature_unit_for(request.user))
+    # FR-8: the forecast is only requested once current weather (fresh or
+    # stale) is showing; a forecast failure never breaks current weather.
+    if context["report"]:
+        context.update(_forecast_context(location, unit))
+    # FR-12: the map always centers on the selected coordinates.
+    current = context["report"].current if context["report"] else None
+    context["map_data"] = {
+        "lat": location.lat,
+        "lon": location.lon,
+        "name": context["label"],
+        "conditions": (
+            ", ".join(part for part in (current.description, temperature(current.temperature, unit)) if part)
+            if current
+            else ""
+        ),
+    }
     # FR-9: the save form names device-location places after the weather report.
     if not location.name and context["report"]:
         context["favorite_location"] = replace(location, name=context["report"].current.place_name)
