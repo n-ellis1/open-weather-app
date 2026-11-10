@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load temperature %}
 
 {% block title %}{% if invalid %}Location not found{% else %}{{ label }} weather{% endif %} · Open Weather{% endblock %}
 
@@ -33,12 +34,27 @@
   {% if report %}
   {% with current=report.current %}
   <div class="weather-summary">
-    <p class="temperature-now">{{ current.temperature|floatformat:"0" }}°C</p>
+    <p class="temperature-now">{{ current.temperature|temperature:temperature_unit }}</p>
     <div>
       {% if current.description %}<p class="conditions">{{ current.description }}</p>{% endif %}
-      {% if current.feels_like is not None %}<p class="hint">Feels like {{ current.feels_like|floatformat:"0" }}°C</p>{% endif %}
+      {% if current.feels_like is not None %}<p class="hint">Feels like {{ current.feels_like|temperature:temperature_unit }}</p>{% endif %}
     </div>
   </div>
+  {% if user.is_authenticated %}
+  <form class="unit-toggle" method="post" action="{% url 'accounts:temperature_unit' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <fieldset>
+      <legend>Temperature unit</legend>
+      <div class="segmented">
+        <button type="submit" class="segmented-option" name="unit" value="C" aria-pressed="{% if temperature_unit == 'F' %}false{% else %}true{% endif %}"><span aria-hidden="true">°C</span><span class="visually-hidden">Celsius</span></button>
+        <button type="submit" class="segmented-option" name="unit" value="F" aria-pressed="{% if temperature_unit == 'F' %}true{% else %}false{% endif %}"><span aria-hidden="true">°F</span><span class="visually-hidden">Fahrenheit</span></button>
+      </div>
+    </fieldset>
+  </form>
+  {% else %}
+  <p class="hint"><a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in</a> to show temperatures in Fahrenheit and save your choice.</p>
+  {% endif %}
   <p class="hint">
     {% if not report.is_stale %}Last updated <time datetime="{{ report.fetched_at|date:'c' }}">{{ report.fetched_at|date:"j M Y, H:i T" }}</time>.{% endif %}
     Latitude {{ location.lat }}, longitude {{ location.lon }}.
@@ -56,7 +72,7 @@
   <dl class="detail-grid">
     <div class="detail">
       <dt>Feels like</dt>
-      <dd>{% if current.feels_like is not None %}{{ current.feels_like|floatformat:"0" }}°C{% else %}Not available{% endif %}</dd>
+      <dd>{{ current.feels_like|temperature:temperature_unit }}</dd>
     </div>
     <div class="detail">
       <dt>Humidity</dt>

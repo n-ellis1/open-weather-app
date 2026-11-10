@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in · Open Weather{% endblock %}
+
+{% block content %}
+<section class="card auth-card" aria-labelledby="sign-in-heading">
+  <h1 id="sign-in-heading">Sign in</h1>
+  <form method="post" action="{% url 'accounts:login' %}" novalidate>
+    {% csrf_token %}
+    {% include "accounts/_form_fields.html" %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit" class="button">Sign in</button>
+  </form>
+  <p class="hint">New here?
+    <a href="{% url 'accounts:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a>.
+  </p>
+</section>
+{% endblock %}

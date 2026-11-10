@@ -26,6 +26,10 @@ weather/           Weather app
   views.py         Input validation and rendering
   templates/       Page templates
   tests/           Offline tests (OpenWeather is always mocked)
+accounts/          Registration, sign-in/out (Django auth), and the °C/°F preference
+  models.py        TemperaturePreference (one per user; Celsius when unset)
+  templatetags/    `temperature` filter: converts cached metric values for display
+  context_processors.py  Puts the viewer's `temperature_unit` in every template
 templates/         Shared base template
 static/css/        Shared dark theme (theme.css)
 static/js/         Browser scripts (current-location.js for "Use my location")
@@ -73,6 +77,12 @@ result to open its current-weather dashboard. "Use my location" asks the
 browser for permission and opens the dashboard for your coordinates. Browsers
 only share location on HTTPS or localhost, so use http://127.0.0.1:8000/ or
 http://localhost:8000/ locally.
+
+Search and the dashboard work without an account. Use **Register** in the
+header to create one; signed-in users get a °C/°F toggle on the dashboard,
+and the choice is saved to their account. Weather is cached once per location
+in metric and converted when the page is drawn, so switching units doesn't
+call OpenWeather again.
 
 ## Test
 

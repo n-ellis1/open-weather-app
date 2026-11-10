@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Create an account · Open Weather{% endblock %}
+
+{% block content %}
+<section class="card auth-card" aria-labelledby="register-heading">
+  <h1 id="register-heading">Create an account</h1>
+  <p class="hint">An account saves your temperature unit, and soon your favorite places.
+     Search and weather stay available without one.</p>
+  <form method="post" action="{% url 'accounts:register' %}" novalidate>
+    {% csrf_token %}
+    {% include "accounts/_form_fields.html" %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit" class="button">Create account</button>
+  </form>
+  <p class="hint">Already have an account?
+    <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign in</a>.
+  </p>
+</section>
+{% endblock %}
