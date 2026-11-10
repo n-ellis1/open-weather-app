@@ -491,6 +491,56 @@ input[aria-invalid="true"] {
   outline-offset: -3px;
 }
 
+/* Favorites (FR-9 to FR-11) */
+.result-item:has(.result-action) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.result-item:has(.result-action) .result-link {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.result-action {
+  padding: var(--space-2) var(--space-4);
+}
+
+.result-action form,
+.favorite-action form {
+  margin: 0;
+}
+
+.favorite-action {
+  margin-top: var(--space-4);
+}
+
+.saved-badge {
+  color: var(--color-warning-border);
+  font-weight: 600;
+  margin: 0;
+}
+
+.saved-badge a {
+  font-weight: 400;
+}
+
+.account-nav a[aria-current="page"] {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+
+.alert-success,
+.alert-info {
+  border-left-color: var(--color-accent);
+}
+
+.messages .alert {
+  margin-bottom: var(--space-4);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

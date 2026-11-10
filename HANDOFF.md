@@ -1,37 +1,41 @@
 # Weather App Handoff
 
 ## Current status (2026-11-09)
-Milestone done: Task 4, registration, sign-in, and saved temperature preference (FR-1, FR-2, FR-3). The changes are uncommitted and awaiting review. Task 3 (postal search, device location) is committed in `54e2604`.
+Milestone done: Task 5, favorite locations (FR-9, FR-10, FR-11). The changes are uncommitted and awaiting review. Task 4 (accounts, °C/°F preference) is committed in `159a8dd`.
 
 What changed:
-- New `accounts` app, added to `INSTALLED_APPS` and mounted at `/accounts/`. Its migration is `accounts/migrations/0001_initial.py`, so run `migrate` on existing databases.
-- `accounts/models.py`: `TemperaturePreference` (OneToOne user, `unit` "C"/"F"). A row is created only when the user picks a unit, and users with no row see Celsius. The helpers `temperature_unit_for(user)` and `set_temperature_unit(user, unit)` (`update_or_create` keyed on the given user) are the only paths to the table.
-- `accounts/views.py` + `urls.py`:
-  - `register` uses `UserCreationForm` with Django's password validators, signs the user in, and redirects to a safe `next` (otherwise to search). Signed-in users who open it go to search.
-  - `login` is Django's `LoginView` with `redirect_authenticated_user`. Bad credentials show Django's standard error in a `role="alert"` box.
-  - `logout` is Django's `LogoutView`, which only accepts POST.
-  - `temperature_unit` is `@require_POST` + `@login_required` + CSRF. It accepts only "C" or "F" (anything else returns 400), saves the unit for `request.user`, and redirects to a same-host `next`.
-- `settings.py`: `LOGIN_URL`, `LOGIN_REDIRECT_URL`, and `LOGOUT_REDIRECT_URL` (both redirects go to search). The context processor `accounts.context_processors.temperature_unit` is lazy, so it only queries the database when a template uses `temperature_unit`.
-- `accounts/templatetags/temperature.py`: `{{ celsius|temperature:temperature_unit }}` returns "31°C", "89°F", or "Not available". The dashboard uses it for the current, feels-like, and detail-card temperatures. The weather cache is unchanged: one metric entry per location, shared by all users and units.
-- Templates: `registration/login.html` and `registration/register.html` share the field partial `accounts/_form_fields.html`. Error and help ids match the `aria-describedby` and `aria-invalid` attributes Django generates. The `base.html` header shows "Sign in" and "Register" (with `?next=` set to the current page) for guests, and "Signed in as X" with a POST "Sign out" form for users. The dashboard shows signed-in users a `<fieldset>` with "Temperature unit" and two submit buttons using `aria-pressed`, labeled °C/°F with visually hidden "Celsius"/"Fahrenheit". Guests see a "Sign in to show temperatures in Fahrenheit" hint.
-- `theme.css`: `.header-row`, `.account-nav`, `.button-small`, `.auth-card`, `.form-field`, `.field-errors`, `.unit-toggle`, and `.segmented(-option)`, all built from the existing tokens. README is updated.
+- New `favorites` app, added to `INSTALLED_APPS` and mounted at `/favorites/`. Its migration is `favorites/migrations/0001_initial.py`, so run `migrate` on existing databases.
+- `favorites/models.py`:
+  - `SavedLocation`: name, state, country_code, plus `lat`/`lon` stored as 4-decimal `DecimalField`s. They're unique together, so places are matched by coordinates.
+  - `Favorite`: user FK + location FK, unique per (user, location). Rows are shared between users, and each user links to them through their own `Favorite`.
+  - Helpers: `save_favorite(user, location)` (get-or-create; fills in a blank name), `favorite_coordinates(user)`, and `remove_favorite(fav)` (also deletes a `SavedLocation` once nobody has it saved). `SavedLocation.dashboard_query` builds the dashboard link.
+- `favorites/views.py`:
+  - `favorite_list`: `@login_required`. Filtered by `request.user` and makes no OpenWeather calls.
+  - `save`: `@require_POST` + `@login_required` + CSRF. Validates input with `weather.views.location_from_params` (400 on bad coordinates), shows a success or "already in your favorites" message, and redirects to a same-host `next` (otherwise to Favorites).
+  - `remove`: `@require_POST` + `@login_required` + CSRF. Uses `get_object_or_404(..., user=request.user)`, so another user's id returns 404.
+- Renamed for reuse: `accounts.views._safe_next` → `safe_next`, and `weather.views._location_from_params` → `location_from_params`.
+- `weather/views.py` passes `saved_coordinates` to the search and dashboard pages. The dashboard also passes `favorite_location`, which uses the report's place name when the URL has none (device location).
+- Templates:
+  - Search results: each result has a "☆ Save" form for signed-in users (with visually hidden "<label> to favorites"), or "★ Saved" if already saved. Guests see a sign-in hint.
+  - Dashboard: "Save to favorites", or "★ In your favorites · View favorites". This shows even when weather fails to load.
+  - `favorites/list.html`: links to the dashboard plus a Remove button per row, and an empty state that links to search.
+  - Shared hidden fields are in `favorites/_location_fields.html`.
+  - `base.html`: a "Favorites" header link for signed-in users (`aria-current` on that page), and Django messages rendered in a `role="status"` region.
+- `theme.css`: `.result-action`, `.favorite-action`, `.saved-badge`, `.alert-success/info`, `.messages`, all built from existing tokens. README is updated.
 
 ## Decisions
-- **Still open: One Call 3.0.** `/data/2.5/weather` has no UV index ("Not available"). UV (FR-7) and daily highs/lows (FR-8) need `/data/3.0/onecall`, which requires a separate subscription. Ask the user before building the forecast.
-- When the forecast is built, render its temperatures with `|temperature:temperature_unit` (and pass the unit to the chart JS from the template). Keep cached data in metric.
-- Guests always see °C. FR-3 makes the toggle a signed-in feature, so there's no session-only unit.
-- Accounts use a username + password (Django default user). There's no email or password reset yet.
-- A guest who POSTs the unit form is sent to sign-in with `next=/accounts/temperature-unit/` (a 405 if followed). In practice guests never see the form.
-- Carried over: a two-letter qualifier is read as a US state. Geolocation links pass no name. JS isn't unit-tested (no Node). The cache is in-memory LocMemCache. The app is dark only. Tests patch `weather.services.get_client` / `weather.services.now` and call `cache.clear()`.
-- `settings.py` has an unused `MAILERS` dict, which isn't a Django setting. Replace it with `EMAIL_BACKEND` if email is ever needed.
+- **Still open: One Call 3.0.** `/data/2.5/weather` has no UV index, and daily highs/lows (FR-8) need either `/data/3.0/onecall` (separate subscription) or the free `/data/2.5/forecast` (5 days in 3-hour steps, so daily high/low has to be aggregated). Ask the user before building the forecast.
+- When the forecast is built, render its temperatures with `|temperature:temperature_unit` and pass the unit to the chart JS from the template. Keep cached data in metric.
+- Favorites store the label at save time. Same coordinates mean the same favorite, even with a different label (the first name wins, and a blank name is filled in later). Saving from search re-runs the search on redirect, which costs one geocode call. Geocoding isn't cached.
+- The dashboard is still public by coordinates. Only the favorites list and changes require sign-in.
+- Carried over: guests always see °C. Accounts are username + password. A two-letter qualifier is read as a US state. JS isn't unit-tested (no Node). The cache is LocMemCache. The app is dark only. Tests patch `weather.services.get_client` / `weather.services.now` and call `cache.clear()`. The `MAILERS` setting is unused.
 
 ## Verification
-- TDD: the new tests failed first with ImportError (`TemperaturePreference`), `NoReverseMatch` (no `accounts` namespace), and missing header text. They passed after implementation.
-- New tests are in `accounts/tests/test_auth.py` and `test_temperature_preference.py` (41 tests). They cover registration (success, `next`, external `next`, mismatch, duplicate, weak password), sign-in errors (wrong password, unknown user, CSRF), POST-only sign-out, header links, guest access to search and the dashboard, the conversion filter, the default unit, saving and switching, persistence across sign-out/sign-in, ownership (one user's choice doesn't affect another, a posted `user` field is ignored), login/POST/CSRF/invalid-unit/open-redirect protection, a single OpenWeather call across unit changes and users, and the stale fallback in °F.
-- `uv run python manage.py test` → 102 tests, OK (offline).
+- TDD: `favorites/tests/test_favorites.py` (37 tests) failed first with `ModuleNotFoundError: favorites.models`, then passed. They cover saving from search and from the dashboard (including device location and weather errors), the already-saved state, duplicate and re-rounded saves, same name with different coordinates, two users saving one place, list isolation, the header link, opening the correct location (the dashboard calls OpenWeather with the favorite's coordinates), removal, another user's id → 404, guest redirects, GET → 405, missing CSRF → 403, invalid coordinates → 400, a posted `user` field ignored, and open-redirect protection.
+- `uv run python manage.py test` → 139 tests, OK (offline).
 - `uv run python manage.py check` → no issues. `makemigrations --check` → no changes.
 - Not yet clicked through in a real browser, and not run against the live API (no key yet).
 
 ## Next task
-- Favorites (FR-9, FR-10, FR-11): a `Favorite` model (user FK, name, state, country, lat/lon; unique per user + coordinates). Add a POST + CSRF "Save" on search results and the dashboard, a sign-in-only "My favorites" list linking to the dashboard, and a POST remove. Scope every lookup to `request.user` (another user's id returns 404). Test first, including ownership.
-- Follow-ups: the One Call 3.0 decision before FR-8, and a live check of search and the unit toggle once the API key is in `.env`.
+- Task 6: interactive multi-day forecast (FR-8) and weather map (FR-12). First ask the user which forecast endpoint to use (One Call 3.0 vs free 5-day/3-hour). The forecast needs a chart with keyboard-selectable days, a text table of each day's high/low/conditions, cached forecast data with the same 10-minute and stale-fallback rules, and the user's °C/°F unit. The map needs a library choice (e.g. Leaflet + OpenStreetMap tiles, which is a new dependency, so ask), centered on the selected location with a marker popup showing the name and current conditions. Weather tiles must be proxied so the API key never reaches the browser. Test first.
+- Follow-up: once the API key is in `.env`, a live check of search, saving from search results, and the unit toggle.

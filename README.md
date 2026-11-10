@@ -30,6 +30,9 @@ accounts/          Registration, sign-in/out (Django auth), and the °C/°F pref
   models.py        TemperaturePreference (one per user; Celsius when unset)
   templatetags/    `temperature` filter: converts cached metric values for display
   context_processors.py  Puts the viewer's `temperature_unit` in every template
+favorites/         Saved locations (sign-in only)
+  models.py        SavedLocation (unique rounded lat/lon) and Favorite (one per user + place)
+  views.py         Favorites list, POST save, POST remove (scoped to the signed-in user)
 templates/         Shared base template
 static/css/        Shared dark theme (theme.css)
 static/js/         Browser scripts (current-location.js for "Use my location")
@@ -83,6 +86,12 @@ header to create one; signed-in users get a °C/°F toggle on the dashboard,
 and the choice is saved to their account. Weather is cached once per location
 in metric and converted when the page is drawn, so switching units doesn't
 call OpenWeather again.
+
+Signed-in users can also **Save** a location from the search results or the
+dashboard. **Favorites** in the header lists their saved places; select one
+to open its dashboard, or use **Remove** to delete it. Places are matched by
+coordinates, so Paris, Texas and Paris, France are separate favorites, and
+saving the same place twice keeps a single entry.
 
 ## Test
 

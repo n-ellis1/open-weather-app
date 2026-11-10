@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load temperature %}
+{% load favorites temperature %}
 
 {% block title %}{% if invalid %}Location not found{% else %}{{ label }} weather{% endif %} · Open Weather{% endblock %}
 
@@ -63,6 +63,18 @@
   {% else %}
   <p class="hint">Latitude {{ location.lat }}, longitude {{ location.lon }}.</p>
   {% endif %}
+  <div class="favorite-action">
+    {% if not user.is_authenticated %}
+    <p class="hint"><a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in</a> to save this location to your favorites.</p>
+    {% elif location|is_saved:saved_coordinates %}
+    <p class="saved-badge"><span aria-hidden="true">★</span> In your favorites · <a href="{% url 'favorites:list' %}">View favorites</a></p>
+    {% else %}
+    <form method="post" action="{% url 'favorites:save' %}">
+      {% with location=favorite_location %}{% include "favorites/_location_fields.html" %}{% endwith %}
+      <button type="submit" class="button button-secondary"><span aria-hidden="true">☆</span> Save to favorites</button>
+    </form>
+    {% endif %}
+  </div>
 </section>
 
 {% if report %}

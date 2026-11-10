@@ -1,0 +1,7 @@
+{% load l10n %}{% csrf_token %}
+<input type="hidden" name="lat" value="{{ location.lat|unlocalize }}">
+<input type="hidden" name="lon" value="{{ location.lon|unlocalize }}">
+<input type="hidden" name="name" value="{{ location.name }}">
+<input type="hidden" name="state" value="{{ location.state }}">
+<input type="hidden" name="country" value="{{ location.country_code }}">
+<input type="hidden" name="next" value="{{ request.get_full_path }}">

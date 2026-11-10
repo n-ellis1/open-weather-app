@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}My favorites · Open Weather{% endblock %}
+
+{% block content %}
+<section class="card" aria-labelledby="favorites-heading">
+  <h1 id="favorites-heading">My favorites</h1>
+  {% if favorites %}
+  <p class="hint">{{ favorites|length }} saved location{{ favorites|length|pluralize }}. Select one to see its current weather.</p>
+  <ul class="result-list">
+    {% for favorite in favorites %}
+    {% with place=favorite.location %}
+    <li class="result-item">
+      <a class="result-link" href="{% url 'weather:dashboard' %}?{{ place.dashboard_query }}">
+        <span class="result-name">{{ place.label }}</span>
+        <span class="result-meta">Latitude {{ place.latitude }}, longitude {{ place.longitude }}</span>
+      </a>
+      <div class="result-action">
+        <form method="post" action="{% url 'favorites:remove' favorite.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="button button-secondary button-small">Remove <span class="visually-hidden">{{ place.label }} from favorites</span></button>
+        </form>
+      </div>
+    </li>
+    {% endwith %}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>You haven't saved any locations yet.</p>
+  <p><a class="button" href="{% url 'weather:search' %}">Search for a location</a></p>
+  {% endif %}
+</section>
+{% endblock %}

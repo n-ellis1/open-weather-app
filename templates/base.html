@@ -13,6 +13,7 @@
       <a class="site-title" href="{% url 'weather:search' %}">Open Weather</a>
       <nav class="account-nav" aria-label="Account">
         {% if user.is_authenticated %}
+        <a href="{% url 'favorites:list' %}"{% if request.resolver_match.view_name == 'favorites:list' %} aria-current="page"{% endif %}>Favorites</a>
         <span class="account-name">Signed in as <strong>{{ user.get_username }}</strong></span>
         <form method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
@@ -28,6 +29,13 @@
     </div>
   </header>
   <main id="main" class="container" tabindex="-1">
+    {% if messages %}
+    <div class="messages" role="status">
+      {% for message in messages %}
+      <p class="alert alert-{{ message.tags }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
   {% block scripts %}{% endblock %}

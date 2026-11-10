@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load l10n static %}
+{% load favorites l10n static %}
 
 {% block title %}{% if search_label %}{{ search_label }} – {% endif %}Search locations · Open Weather{% endblock %}
 
@@ -59,6 +59,9 @@
   <h2 id="results-heading">Results for “{{ search_label }}”</h2>
   {% if results %}
   <p class="hint" aria-live="polite">{{ results|length }} matching location{{ results|length|pluralize }}.</p>
+  {% if not user.is_authenticated %}
+  <p class="hint"><a href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in</a> to save locations to your favorites.</p>
+  {% endif %}
   <ul class="result-list">
     {% for location in results %}
     <li class="result-item">
@@ -66,6 +69,18 @@
         <span class="result-name">{{ location.label }}</span>
         <span class="result-meta">{% if location.postal_code %}Postal code {{ location.postal_code }} · {% endif %}Latitude {{ location.lat }}, longitude {{ location.lon }}</span>
       </a>
+      {% if user.is_authenticated %}
+      <div class="result-action">
+        {% if location|is_saved:saved_coordinates %}
+        <span class="saved-badge"><span aria-hidden="true">★</span> Saved <span class="visually-hidden">{{ location.label }} is in your favorites</span></span>
+        {% else %}
+        <form method="post" action="{% url 'favorites:save' %}">
+          {% include "favorites/_location_fields.html" %}
+          <button type="submit" class="button button-secondary button-small"><span aria-hidden="true">☆</span> Save <span class="visually-hidden">{{ location.label }} to favorites</span></button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>

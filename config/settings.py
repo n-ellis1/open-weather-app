@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "weather",
     "accounts",
+    "favorites",
 ]
 
 MIDDLEWARE = [

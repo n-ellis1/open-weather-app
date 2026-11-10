@@ -1,9 +1,12 @@
 import math
 import re
+from dataclasses import replace
 from functools import partial
 from urllib.parse import urlencode
 
 from django.shortcuts import render
+
+from favorites.models import favorite_coordinates
 
 from . import services
 from .countries import COUNTRY_CHOICES, COUNTRY_NAMES, country_name
@@ -70,6 +73,7 @@ def search(request):
         try:
             context["results"] = lookup()
             context["searched"] = True
+            context["saved_coordinates"] = favorite_coordinates(request.user)
         except MissingAPIKeyError:
             context["error"] = {
                 "kind": "missing_key",
@@ -101,7 +105,7 @@ def _parse_coordinate(raw, limit):
     return services.round_coordinate(value)
 
 
-def _location_from_params(params):
+def location_from_params(params):
     """Build the selected Location from query params, or None if invalid."""
     lat = _parse_coordinate(params.get("lat"), 90)
     lon = _parse_coordinate(params.get("lon"), 180)
@@ -118,7 +122,7 @@ def _location_from_params(params):
 
 
 def dashboard(request):
-    location = _location_from_params(request.GET)
+    location = location_from_params(request.GET)
     if location is None:
         return render(request, "weather/dashboard.html", {"invalid": True}, status=400)
 
@@ -153,5 +157,11 @@ def dashboard(request):
 
     if not context["label"]:
         context["label"] = f"Latitude {location.lat}, longitude {location.lon}"
+    # FR-9: the save form names device-location places after the weather report.
+    if not location.name and context["report"]:
+        context["favorite_location"] = replace(location, name=context["report"].current.place_name)
+    else:
+        context["favorite_location"] = location
+    context["saved_coordinates"] = favorite_coordinates(request.user)
     context["retry_url"] = f"{request.path}?{request.GET.urlencode()}"
     return render(request, "weather/dashboard.html", context, status=status)

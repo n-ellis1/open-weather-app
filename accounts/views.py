@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from .models import TemperatureUnit, set_temperature_unit
 
 
-def _safe_next(request, default=settings.LOGIN_REDIRECT_URL):
+def safe_next(request, default=settings.LOGIN_REDIRECT_URL):
     """Return the posted/queried "next" URL if it stays on this site."""
     next_url = request.POST.get("next") or request.GET.get("next") or ""
     if next_url and url_has_allowed_host_and_scheme(
@@ -29,7 +29,7 @@ def register(request):
     if request.method == "POST" and form.is_valid():
         user = form.save()
         login(request, user)
-        return redirect(_safe_next(request))
+        return redirect(safe_next(request))
 
     return render(
         request,
@@ -46,4 +46,4 @@ def temperature_unit(request):
     if unit not in TemperatureUnit.values:
         return HttpResponseBadRequest("Choose Celsius or Fahrenheit.")
     set_temperature_unit(request.user, unit)
-    return redirect(_safe_next(request))
+    return redirect(safe_next(request))
