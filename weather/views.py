@@ -1,44 +1,92 @@
 import math
+import re
+from functools import partial
+from urllib.parse import urlencode
 
 from django.shortcuts import render
 
 from . import services
+from .countries import COUNTRY_CHOICES, COUNTRY_NAMES, country_name
 from .openweather import MissingAPIKeyError, OpenWeatherError
 
 MAX_QUERY_LENGTH = 100
+MAX_POSTAL_CODE_LENGTH = 20
+DEFAULT_POSTAL_COUNTRY = "US"
+POSTAL_CODE_PATTERN = re.compile(r"[A-Z0-9][A-Z0-9 -]*")
+
+
+def _invalid(message):
+    return {"kind": "invalid", "message": message}
+
+
+def _validate_postal_search(postal_code, country_code):
+    """Return an error dict for invalid postal search input, or None."""
+    if country_code not in COUNTRY_NAMES:
+        return _invalid("Choose a country from the list.")
+    if len(postal_code) > MAX_POSTAL_CODE_LENGTH:
+        return _invalid(f"Postal codes must be {MAX_POSTAL_CODE_LENGTH} characters or fewer.")
+    if not POSTAL_CODE_PATTERN.fullmatch(postal_code):
+        return _invalid("Postal codes can only contain letters, numbers, spaces, and hyphens.")
+    return None
 
 
 def search(request):
     query = request.GET.get("q", "").strip()
-    context = {"query": query, "searched": False, "results": [], "error": None}
+    # Collapse internal whitespace and uppercase, e.g. " sw1a  1aa " -> "SW1A 1AA".
+    postal_code = " ".join(request.GET.get("zip", "").split()).upper()
+    postal_country = request.GET.get("country", "").strip().upper()
+    context = {
+        "query": query,
+        "postal_code": postal_code,
+        "postal_country": postal_country or DEFAULT_POSTAL_COUNTRY,
+        "countries": COUNTRY_CHOICES,
+        "searched": False,
+        "results": [],
+        "error": None,
+    }
 
-    if query:
+    if postal_code:
+        context["search_label"] = f"{postal_code}, {country_name(postal_country)}"
+        context["empty_message"] = (
+            f"No locations matched postal code {postal_code} in {country_name(postal_country)}. "
+            "Check the code and the selected country."
+        )
+        context["retry_url"] = f"{request.path}?{urlencode({'zip': postal_code, 'country': postal_country})}"
+        context["error"] = _validate_postal_search(postal_code, postal_country)
+        lookup = partial(services.search_postal_code, postal_code, postal_country)
+    elif query:
+        context["search_label"] = query
+        context["empty_message"] = (
+            f"No locations matched “{query}”. Check the spelling or try a nearby city."
+        )
+        context["retry_url"] = f"{request.path}?{urlencode({'q': query})}"
         if len(query) > MAX_QUERY_LENGTH:
+            context["error"] = _invalid(f"Search terms must be {MAX_QUERY_LENGTH} characters or fewer.")
+        lookup = partial(services.search_locations, query)
+    else:
+        lookup = None
+
+    if lookup and not context["error"]:
+        try:
+            context["results"] = lookup()
+            context["searched"] = True
+        except MissingAPIKeyError:
             context["error"] = {
-                "kind": "invalid",
-                "message": f"Search terms must be {MAX_QUERY_LENGTH} characters or fewer.",
+                "kind": "missing_key",
+                "message": (
+                    "Live search is unavailable because no OpenWeather API key "
+                    "is configured. Add OPENWEATHER_API_KEY to the .env file "
+                    "and restart the server."
+                ),
             }
-        else:
-            try:
-                context["results"] = services.search_locations(query)
-                context["searched"] = True
-            except MissingAPIKeyError:
-                context["error"] = {
-                    "kind": "missing_key",
-                    "message": (
-                        "Live search is unavailable because no OpenWeather API key "
-                        "is configured. Add OPENWEATHER_API_KEY to the .env file "
-                        "and restart the server."
-                    ),
-                }
-            except OpenWeatherError:
-                context["error"] = {
-                    "kind": "upstream",
-                    "message": (
-                        "We couldn't reach the weather service. "
-                        "Please try again or search for a different location."
-                    ),
-                }
+        except OpenWeatherError:
+            context["error"] = {
+                "kind": "upstream",
+                "message": (
+                    "We couldn't reach the weather service. "
+                    "Please try again or search for a different location."
+                ),
+            }
 
     return render(request, "weather/search.html", context)
 

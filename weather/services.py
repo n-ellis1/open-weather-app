@@ -9,7 +9,8 @@ from django.core.cache import cache
 from django.utils import timezone as django_timezone
 
 from .countries import country_name
-from .openweather import OpenWeatherClient, OpenWeatherError
+from .openweather import OpenWeatherClient, OpenWeatherError, OpenWeatherNotFoundError
+from .us_states import us_state_code
 
 # Successful weather is reused without an upstream call for this long (NFR-1).
 WEATHER_FRESH_FOR = timedelta(minutes=10)
@@ -38,6 +39,8 @@ class Location:
     country_code: str
     lat: float
     lon: float
+    # Set when the location came from a ZIP/postal code search.
+    postal_code: str = ""
 
     @property
     def country(self):
@@ -49,12 +52,27 @@ class Location:
         return ", ".join(part for part in (self.name, self.state, self.country) if part)
 
 
+def geocoding_query(query):
+    """Turn "City, State" into OpenWeather's "City,ST,US" form.
+
+    "Paris, Texas" and "Paris, TX" become "Paris,TX,US". Any other query,
+    including an unqualified "Paris", is returned unchanged so OpenWeather
+    lists every match.
+    """
+    parts = query.split(",")
+    if len(parts) == 2:
+        city, state = parts[0].strip(), us_state_code(parts[1])
+        if city and state:
+            return f"{city},{state},US"
+    return query
+
+
 def search_locations(query):
     """Return distinct locations matching a city name.
 
     Raises MissingAPIKeyError or OpenWeatherError when the lookup fails.
     """
-    raw_matches = get_client().geocode_city(query)
+    raw_matches = get_client().geocode_city(geocoding_query(query))
     if not isinstance(raw_matches, list):
         raise OpenWeatherError("OpenWeather returned an unexpected search response.")
 
@@ -77,6 +95,30 @@ def search_locations(query):
         seen.add(key)
         locations.append(location)
     return locations
+
+
+def search_postal_code(postal_code, country_code):
+    """Return the location for a ZIP/postal code in a country, or [] if unknown.
+
+    OpenWeather returns a single match (no state) and HTTP 404 for unknown
+    codes. Raises MissingAPIKeyError or OpenWeatherError when the lookup fails.
+    """
+    try:
+        match = get_client().geocode_zip(postal_code, country_code)
+    except OpenWeatherNotFoundError:
+        return []
+    try:
+        location = Location(
+            name=str(match["name"]),
+            state="",
+            country_code=str(match.get("country") or country_code),
+            lat=round_coordinate(match["lat"]),
+            lon=round_coordinate(match["lon"]),
+            postal_code=str(match.get("zip") or postal_code),
+        )
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise OpenWeatherError("OpenWeather returned an unexpected postal code response.") from None
+    return [location]
 
 
 def round_coordinate(value):

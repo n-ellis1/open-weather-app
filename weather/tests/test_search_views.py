@@ -43,6 +43,45 @@ class CitySearchViewTests(TestCase):
         self.assertContains(response, "Paris, Texas, United States")
         self.assertContains(response, "Paris, Ile-de-France, France")
 
+    def test_city_with_us_state_name_or_abbreviation_is_sent_as_city_state_country(self):
+        self.client_mock.geocode_city.return_value = [PARIS_MATCHES[1]]
+
+        for query in ("Paris, Texas", "Paris, TX", "paris ,  texas", "Paris,tx"):
+            with self.subTest(query=query):
+                self.client_mock.geocode_city.reset_mock()
+
+                response = self.client.get(reverse("weather:search"), {"q": query})
+
+                expected = "paris,TX,US" if query.startswith("paris") else "Paris,TX,US"
+                self.client_mock.geocode_city.assert_called_once_with(expected)
+                self.assertContains(response, 'class="result-item"', count=1)
+                self.assertContains(response, "Paris, Texas, United States")
+                # The heading keeps what the user typed.
+                self.assertContains(response, f"Results for “{query}”")
+
+    def test_unqualified_search_in_any_case_lists_every_match_to_choose_from(self):
+        self.client_mock.geocode_city.return_value = PARIS_MATCHES
+
+        for query in ("Paris", "PAris"):
+            with self.subTest(query=query):
+                self.client_mock.geocode_city.reset_mock()
+
+                response = self.client.get(reverse("weather:search"), {"q": query})
+
+                self.client_mock.geocode_city.assert_called_once_with(query)
+                self.assertContains(response, 'class="result-item"', count=2)
+                self.assertContains(response, "Paris, Texas, United States")
+                self.assertContains(response, "Paris, Ile-de-France, France")
+
+    def test_city_with_non_state_qualifier_is_sent_unchanged(self):
+        self.client_mock.geocode_city.return_value = [PARIS_MATCHES[0]]
+
+        for query in ("Paris, France", "Paris, TX, US", "Paris, Texas, United States"):
+            with self.subTest(query=query):
+                self.client_mock.geocode_city.reset_mock()
+                self.client.get(reverse("weather:search"), {"q": query})
+                self.client_mock.geocode_city.assert_called_once_with(query)
+
     def test_result_without_state_shows_city_and_country(self):
         self.client_mock.geocode_city.return_value = [
             {"name": "Singapore", "lat": 1.29, "lon": 103.85, "country": "SG"},

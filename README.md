@@ -10,7 +10,8 @@ full feature list and `HANDOFF.md` for current progress.
 - **Django 6.1** with server-rendered Django templates
 - **SQLite** for users, temperature preferences, and favorites
 - **Django authentication** for registration and sign-in
-- **JavaScript** (planned) for browser geolocation, the interactive forecast, and the map
+- **JavaScript** for browser geolocation ("Use my location"); the interactive
+  forecast and the map are planned
 - **OpenWeather** as the weather provider, called only from the backend
   (`weather/openweather.py`) using Python's standard-library HTTP client with a timeout
 
@@ -27,6 +28,7 @@ weather/           Weather app
   tests/           Offline tests (OpenWeather is always mocked)
 templates/         Shared base template
 static/css/        Shared dark theme (theme.css)
+static/js/         Browser scripts (current-location.js for "Use my location")
 ```
 
 ## Setup
@@ -65,8 +67,12 @@ static/css/        Shared dark theme (theme.css)
 uv run python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and search for a city such as "Paris", then
-select a result to open its current-weather dashboard.
+Open http://127.0.0.1:8000/ and search for a city such as "Paris", or a
+ZIP/postal code such as "90210" with "United States" selected, then select a
+result to open its current-weather dashboard. "Use my location" asks the
+browser for permission and opens the dashboard for your coordinates. Browsers
+only share location on HTTPS or localhost, so use http://127.0.0.1:8000/ or
+http://localhost:8000/ locally.
 
 ## Test
 

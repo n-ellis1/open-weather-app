@@ -41,6 +41,11 @@
   box-sizing: border-box;
 }
 
+/* Keep the hidden attribute working on elements that set display. */
+[hidden] {
+  display: none !important;
+}
+
 html {
   font-size: 100%;
 }
@@ -160,6 +165,42 @@ select:focus-visible {
   color: var(--color-text-muted);
   font-size: 0.9rem;
   margin: var(--space-2) 0 0;
+}
+
+/* Search page: city form, postal code form, and "Use my location". */
+.search-options {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.postal-fields {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.5fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.current-location {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.location-status {
+  margin: var(--space-2) 0 0;
+}
+
+.location-status-error {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+}
+
+.button[aria-disabled="true"] {
+  opacity: 0.7;
+  cursor: progress;
 }
 
 /* Buttons */
@@ -346,6 +387,10 @@ select:focus-visible {
 @media (max-width: 30rem) {
   .field-row {
     flex-direction: column;
+  }
+
+  .postal-fields {
+    grid-template-columns: 1fr;
   }
 
   .card {

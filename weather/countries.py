@@ -93,6 +93,10 @@ COUNTRY_NAMES = {
 }
 
 
+# (code, name) pairs sorted by name, for country selectors.
+COUNTRY_CHOICES = sorted(COUNTRY_NAMES.items(), key=lambda item: item[1])
+
+
 def country_name(code):
     if not code:
         return ""

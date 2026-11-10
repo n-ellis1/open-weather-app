@@ -6,7 +6,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from django.test import SimpleTestCase
 
-from weather.openweather import MissingAPIKeyError, OpenWeatherClient, OpenWeatherError
+from weather.openweather import (
+    MissingAPIKeyError,
+    OpenWeatherClient,
+    OpenWeatherError,
+    OpenWeatherNotFoundError,
+)
 
 
 def fake_response(payload):
@@ -48,6 +53,42 @@ class OpenWeatherClientTests(SimpleTestCase):
             {"lat": ["33.6618"], "lon": ["-95.5555"], "units": ["metric"], "appid": ["test-key"]},
         )
         self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
+
+    def test_geocode_zip_requests_zip_geocoding_with_country(self):
+        opener = mock.Mock(return_value=fake_response({"zip": "E14", "name": "London"}))
+        client = OpenWeatherClient(api_key="test-key", timeout=3, opener=opener)
+
+        result = client.geocode_zip("E14", "GB")
+
+        self.assertEqual(result, {"zip": "E14", "name": "London"})
+        parts = urlsplit(opener.call_args.args[0])
+        self.assertEqual(parts.scheme, "https")
+        self.assertEqual(parts.netloc, "api.openweathermap.org")
+        self.assertEqual(parts.path, "/geo/1.0/zip")
+        self.assertEqual(parse_qs(parts.query), {"zip": ["E14,GB"], "appid": ["test-key"]})
+        self.assertEqual(opener.call_args.kwargs, {"timeout": 3})
+
+    def test_not_found_raises_not_found_error_without_leaking_key(self):
+        def opener(url, timeout):
+            raise HTTPError(url, 404, "Not Found", {}, None)
+
+        client = OpenWeatherClient(api_key="super-secret", opener=opener)
+
+        with self.assertLogs("weather.openweather", level="WARNING") as logs:
+            with self.assertRaises(OpenWeatherNotFoundError) as caught:
+                client.geocode_zip("00000", "US")
+
+        self.assertIsInstance(caught.exception, OpenWeatherError)
+        self.assertNotIn("super-secret", str(caught.exception))
+        self.assertTrue(all("super-secret" not in line for line in logs.output))
+
+    def test_geocode_zip_without_key_makes_no_request(self):
+        opener = mock.Mock()
+        client = OpenWeatherClient(api_key="", opener=opener)
+
+        with self.assertRaises(MissingAPIKeyError):
+            client.geocode_zip("90210", "US")
+        opener.assert_not_called()
 
     def test_current_weather_without_key_makes_no_request(self):
         opener = mock.Mock()
