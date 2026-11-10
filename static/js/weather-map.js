@@ -67,4 +67,58 @@
     alt: "Weather marker for " + data.name,
     keyboard: true,
   }).addTo(map).bindPopup(popup);
+
+  // Pin preview: clicking empty map drops a pin whose popup links to the
+  // dashboard for that point. No weather is requested until the user follows
+  // "View weather here". Leaflet doesn't fire "click" after a drag, and clicks
+  // on the marker, popups, and controls don't reach the map. A double-click
+  // fires two clicks first, so each click waits briefly and "dblclick" cancels it.
+  var DOUBLE_CLICK_WAIT_MS = 300;
+  var dashboardUrl = container.dataset.dashboardUrl;
+  var pendingPin = null;
+  var previewPin = null;
+
+  function previewPopup(latlng) {
+    var lat = latlng.lat.toFixed(4);
+    var lon = latlng.lng.toFixed(4);
+    var box = document.createElement("div");
+    box.className = "map-popup";
+    var title = document.createElement("strong");
+    title.textContent = "Selected point";
+    box.appendChild(title);
+    var coords = document.createElement("p");
+    coords.textContent = "Latitude " + lat + ", longitude " + lon;
+    box.appendChild(coords);
+    var link = document.createElement("a");
+    link.className = "button button-small";
+    link.href = dashboardUrl + "?" + new URLSearchParams({ lat: lat, lon: lon }).toString();
+    link.textContent = "View weather here";
+    var action = document.createElement("p");
+    action.appendChild(link);
+    box.appendChild(action);
+    return box;
+  }
+
+  function dropPin(latlng) {
+    latlng = latlng.wrap(); // Keep longitude within -180..180 after panning across the date line.
+    if (previewPin) previewPin.remove();
+    previewPin = L.circleMarker(latlng, {
+      className: "map-preview-pin",
+      radius: 8,
+      weight: 2,
+      bubblingMouseEvents: false,
+    }).addTo(map);
+    previewPin.bindPopup(previewPopup(latlng)).openPopup();
+  }
+
+  if (dashboardUrl) {
+    map.on("click", function (event) {
+      clearTimeout(pendingPin);
+      pendingPin = setTimeout(function () { dropPin(event.latlng); }, DOUBLE_CLICK_WAIT_MS);
+    });
+    map.on("dblclick", function () {
+      clearTimeout(pendingPin);
+      pendingPin = null;
+    });
+  }
 })();

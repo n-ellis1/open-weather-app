@@ -117,15 +117,18 @@
   </dl>
 </section>
 {% endwith %}
+{% endif %}
 
+{# The forecast card is always shown; it's only filled once current weather loads. #}
 <section class="card" aria-labelledby="forecast-heading">
   <h2 id="forecast-heading">5-day forecast</h2>
-  {% if forecast_error %}
+  {% if not forecast %}
   <div class="alert alert-warning" role="status">
-    <p>{{ forecast_error }}</p>
+    <p><strong>Forecast unavailable.</strong>
+      {% if forecast_error %}{{ forecast_error }}{% else %}The forecast loads once current weather is available for this location.{% endif %}</p>
     <p><a class="button button-secondary" href="{{ retry_url }}">Try again</a></p>
   </div>
-  {% elif forecast %}
+  {% else %}
   {% if forecast.is_stale %}
   <p class="alert alert-warning" role="status">We couldn't refresh the forecast. Forecast last updated
     <time datetime="{{ forecast.fetched_at|date:'c' }}">{{ forecast.fetched_at|date:"j M Y, H:i T" }}</time>.</p>
@@ -170,13 +173,15 @@
   {{ forecast_chart|json_script:"forecast-data" }}
   {% endif %}
 </section>
-{% endif %}
 
 <section class="card" aria-labelledby="map-heading">
   <h2 id="map-heading">Map</h2>
   <p class="hint" id="map-help">Drag or use the arrow keys to pan, and the + and − buttons or keys to zoom.
-    Select the marker to see the location name{% if report %} and current conditions{% endif %}.</p>
+    Select the marker to see the location name{% if report %} and current conditions{% endif %}.
+    Click a point on the map to drop a pin, then choose “View weather here” to open its weather.
+    You can also <a href="{% url 'weather:search' %}">search by city or ZIP/postal code</a>.</p>
   <div id="weather-map" class="weather-map" role="region" aria-label="Map of {{ label }}" aria-describedby="map-help"
+       data-dashboard-url="{% url 'weather:dashboard' %}"
        data-tile-url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
        data-attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'>
     <p class="map-fallback hint">The map couldn't load. {{ label }} is at latitude {{ location.lat }}, longitude {{ location.lon }}.</p>

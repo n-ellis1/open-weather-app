@@ -781,6 +781,17 @@ input[aria-invalid="true"] {
   margin: var(--space-1) 0 0;
 }
 
+.weather-map .leaflet-popup-content a.button {
+  color: var(--color-on-accent);
+}
+
+/* Previewed pin: a hollow ring, distinct from the location's marker. */
+.weather-map .map-preview-pin {
+  stroke: var(--color-focus);
+  fill: var(--color-focus);
+  fill-opacity: 0.25;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

@@ -272,6 +272,38 @@ class DashboardForecastTests(DashboardTestCase):
         self.assertEqual(response.status_code, 503)
         self.client_mock.forecast.assert_not_called()
 
+    def test_forecast_card_says_unavailable_when_the_request_was_skipped(self):
+        self.client_mock.current_weather.side_effect = OpenWeatherError("Could not reach OpenWeather.")
+
+        response = self.get_dashboard(TEXAS)
+
+        self.assertContains(response, "5-day forecast", status_code=503)
+        self.assertContains(response, "Forecast unavailable", status_code=503)
+        self.assertNotContains(response, 'role="tablist"', status_code=503)
+        self.assertNotContains(response, 'id="forecast-data"', status_code=503)
+
+    def test_forecast_card_says_unavailable_when_the_forecast_fails(self):
+        self.client_mock.forecast.side_effect = OpenWeatherError("Could not reach OpenWeather.")
+
+        response = self.get_dashboard(TEXAS)
+
+        self.assertContains(response, "5-day forecast")
+        self.assertContains(response, "Forecast unavailable")
+
+    def test_forecast_card_says_unavailable_without_an_api_key(self):
+        self.client_mock.current_weather.side_effect = MissingAPIKeyError("no key")
+
+        response = self.get_dashboard(TEXAS)
+
+        self.assertContains(response, "Forecast unavailable", status_code=503)
+        self.client_mock.forecast.assert_not_called()
+
+    def test_available_forecast_does_not_say_unavailable(self):
+        response = self.get_dashboard(TEXAS)
+
+        self.assertNotContains(response, "Forecast unavailable")
+        self.assertContains(response, 'role="tablist"')
+
     def test_missing_api_key_for_forecast_does_not_break_dashboard(self):
         self.client_mock.forecast.side_effect = MissingAPIKeyError("no key")
 
@@ -345,6 +377,45 @@ class DashboardMapTests(DashboardTestCase):
 
         self.assertIn('referrerPolicy: "strict-origin-when-cross-origin"', script)
         self.assertIn('"tileerror"', script)
+
+    def test_map_exposes_dashboard_url_for_previewed_pins(self):
+        response = self.get_dashboard(TEXAS)
+
+        self.assertContains(response, f'data-dashboard-url="{reverse("weather:dashboard")}"')
+        self.assertContains(response, "Click a point on the map")
+
+    def test_map_help_keeps_search_available_for_keyboard_users(self):
+        response = self.get_dashboard(TEXAS)
+
+        self.assertContains(
+            response,
+            f'<a href="{reverse("weather:search")}">search by city or ZIP/postal code</a>',
+        )
+
+    def test_rendering_the_map_requests_weather_only_for_the_selected_location(self):
+        self.get_dashboard(TEXAS)
+
+        self.client_mock.current_weather.assert_called_once_with(33.6618, -95.5555)
+        self.client_mock.forecast.assert_called_once_with(33.6618, -95.5555)
+
+    def test_view_weather_here_link_opens_dashboard_for_previewed_coordinates(self):
+        # The link the preview builds: 4-decimal coordinates and no name.
+        response = self.get_dashboard({"lat": "34.0522", "lon": "-118.2437"})
+
+        self.assertEqual(response.status_code, 200)
+        self.client_mock.current_weather.assert_called_once_with(34.0522, -118.2437)
+
+    def test_map_script_previews_pins_without_requesting_weather(self):
+        script = (settings.BASE_DIR / "static" / "js" / "weather-map.js").read_text(encoding="utf-8")
+
+        self.assertIn("View weather here", script)
+        # Single clicks wait so a double-click zoom can cancel the pin.
+        self.assertIn('"dblclick"', script)
+        self.assertIn("clearTimeout(pendingPin)", script)
+        # The preview doesn't bubble clicks to the map, and nothing fetches weather.
+        self.assertIn("bubblingMouseEvents: false", script)
+        self.assertNotIn("fetch(", script)
+        self.assertNotIn("XMLHttpRequest", script)
 
     @override_settings(OPENWEATHER_API_KEY="secret-test-key")
     def test_api_key_never_reaches_the_page(self):

@@ -103,9 +103,12 @@ location's local date, each day's high and low are estimated from its samples,
 and days the forecast window only partly covers are labelled "Partial day".
 Select a day in the chart or with the day buttons (arrow keys move between
 days) to read its high, low, and conditions. If the forecast can't be loaded,
-current weather still shows. The **map** (Leaflet + OpenStreetMap tiles) is
-centered on the location; select the marker for its name and current
-conditions.
+current weather still shows, and the forecast card says "Forecast
+unavailable". The **map** (Leaflet + OpenStreetMap tiles) is centered on the
+location; select the marker for its name and current conditions. Click any
+other point to drop a preview pin, then choose **View weather here** to open
+the dashboard for those coordinates. Weather is only requested after that
+choice.
 
 ## Test
 
